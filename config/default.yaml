@@ -1,0 +1,187 @@
+# Configuración por defecto para markov-crypto-forecaster
+data:
+  exchange: binance
+  symbol: BTC/USDT
+  timeframe: 1h
+  start_date: 2023-01-01
+  end_date: null  # null para fecha actual
+  max_candles: 1000  # limite por llamada API
+  rate_limit_sleep: 1.0  # segundos entre llamadas
+  
+  # Configuración del preprocesamiento
+  preprocessing:
+    remove_gaps: true
+    forward_fill_limit: 3  # máximo de valores consecutivos a rellenar
+    remove_outliers: true
+    outlier_threshold: 5.0  # z-score threshold
+    
+features:
+  # Lista de features a calcular
+  enabled:
+    - log_returns
+    - volatility
+    - atr
+    - volume_delta
+    - realized_vol
+    - z_scores
+    - order_flow_imbalance  # solo si hay datos de profundidad
+    
+  # Parámetros para features
+  params:
+    volatility_window: 20
+    atr_window: 14
+    rv_window: 20
+    zscore_window: 50
+    
+  # Para HMM discreto - quantiles para discretización
+  discretization:
+    n_quantiles: 5
+    features_to_discretize:
+      - log_returns
+      - volatility
+      - volume_delta
+
+models:
+  # Modelos a evaluar
+  enabled:
+    - hmm_gaussian
+    - hmm_discrete
+    - ms_ar
+    
+  # Parámetros por modelo
+  hmm_gaussian:
+    n_components_range: [2, 3, 4, 5]
+    covariance_type: full
+    n_iter: 100
+    tol: 1e-2
+    random_state: 42
+    init_params: kmeans
+    
+  hmm_discrete:
+    n_components_range: [2, 3, 4, 5]
+    n_iter: 100
+    tol: 1e-2
+    random_state: 42
+    
+  ms_ar:
+    order_range: [1, 2, 3]
+    k_regimes_range: [2, 3, 4]
+    switching_ar: true
+    switching_variance: true
+    random_state: 42
+
+selection:
+  # Criterios de selección de modelo
+  primary_metric: bic  # aic, bic, oos_accuracy, oos_brier
+  oos_validation:
+    method: time_series_split
+    n_splits: 5
+    test_size: 0.2
+    
+  # Walk-forward para selección final
+  walk_forward:
+    method: rolling  # expanding, rolling
+    train_window: 120  # días
+    test_window: 30    # días
+    retrain_frequency: 30  # días
+    
+forecasting:
+  horizons: [1, 3, 5]  # períodos adelante a pronosticar
+  confidence_levels: [0.1, 0.5, 0.9]  # percentiles para intervalos
+  ensemble_method: average  # average, weighted, voting
+  
+strategy:
+  # Mapeo de régimen a señal
+  regime_mapping:
+    bull_trend: long
+    bear_trend: short
+    sideways: flat
+    high_vol: flat
+    
+  # Filtros para señales
+  filters:
+    min_regime_prob: 0.6  # probabilidad mínima para actuar
+    vol_filter: true      # evitar operar en alta volatilidad
+    vol_threshold: 2.0    # múltiplo de vol promedio
+    
+  # Position sizing
+  sizing:
+    method: kelly_fraction  # fixed, kelly_fraction, vol_target
+    kelly_fraction_limit: 0.3
+    vol_target: 0.15  # anualizada
+    max_leverage: 1.0
+    
+risk_management:
+  # Stop loss y take profit
+  stop_loss:
+    method: atr  # atr, percent, fixed
+    atr_multiplier: 1.5
+    percent: 0.02
+    
+  take_profit:
+    method: atr
+    atr_multiplier: 3.0
+    percent: 0.04
+    
+  # Trailing stop
+  trailing_stop:
+    enabled: false
+    atr_multiplier: 2.0
+    
+  # Costos de transacción
+  costs:
+    commission_rate: 0.0004  # 0.04% por lado
+    slippage_rate: 0.0001    # 0.01%
+    spread_cost: 0.0001      # bid-ask spread
+    
+backtesting:
+  # Configuración de backtest
+  initial_capital: 10000.0
+  compound_returns: true
+  reinvest_profits: true
+  
+  # Métricas a calcular
+  metrics:
+    - total_return
+    - sharpe_ratio
+    - sortino_ratio
+    - max_drawdown
+    - calmar_ratio
+    - profit_factor
+    - hit_rate
+    - avg_win_loss_ratio
+    - directional_accuracy
+    - brier_score
+    
+reporting:
+  # Configuración de reportes
+  output_format: [html, png]
+  include_plots:
+    - equity_curve
+    - regime_evolution
+    - returns_distribution
+    - regime_transitions
+    - feature_importance
+    
+  save_trades: true
+  save_positions: true
+  
+paths:
+  data_dir: data
+  models_dir: data/models
+  signals_dir: data/signals
+  backtests_dir: data/backtests
+  reports_dir: reports
+  logs_dir: logs
+  
+logging:
+  level: INFO
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}"
+  file: logs/markov_forecaster.log
+  rotation: "1 week"
+  retention: "1 month"
+  
+mlflow:
+  enabled: false
+  tracking_uri: ./mlruns
+  experiment_name: markov_crypto_forecaster

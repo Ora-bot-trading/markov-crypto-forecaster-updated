@@ -1,0 +1,123 @@
+# Configuración de ejemplo para Binance Spot BTC/USDT
+# Hereda de default.yaml y sobrescribe parámetros específicos
+
+data:
+  exchange: binance
+  symbol: BTC/USDT
+  timeframe: 1h
+  start_date: 2023-01-01  # últimos 365 días desde hoy
+  end_date: null  # fecha actual
+  
+  # Configuración específica para Binance
+  exchange_params:
+    sandbox: false  # true para testnet
+    options:
+      defaultType: spot  # spot, future, delivery
+      
+features:
+  enabled:
+    - log_returns
+    - volatility
+    - atr
+    - volume_delta
+    - realized_vol
+    - z_scores
+    # order_flow_imbalance requiere datos L2 (no disponible gratis)
+    
+  params:
+    volatility_window: 24  # 24 horas para timeframe 1h
+    atr_window: 14
+    rv_window: 24
+    zscore_window: 48  # 2 días
+
+models:
+  enabled:
+    - hmm_gaussian
+    - hmm_discrete
+    - ms_ar
+    
+  hmm_gaussian:
+    n_components_range: [2, 3, 4, 5]
+    covariance_type: full
+    
+  hmm_discrete:
+    n_components_range: [2, 3, 4, 5]
+    
+  ms_ar:
+    order_range: [1, 2, 3]
+    k_regimes_range: [2, 3]  # menos regímenes para datos más estables
+
+selection:
+  walk_forward:
+    method: rolling
+    train_window: 120  # 120 días = ~5 meses de datos horarios
+    test_window: 30    # 30 días de test
+    retrain_frequency: 30  # recalibrar cada mes
+    
+strategy:
+  regime_mapping:
+    # Asumiendo 3 regímenes típicos para BTC
+    0: flat     # régimen bajo vol / sideways
+    1: long     # régimen alcista / trend up
+    2: short    # régimen bajista / trend down
+    
+  filters:
+    min_regime_prob: 0.65  # mayor confianza para BTC volátil
+    vol_filter: true
+    vol_threshold: 2.5
+    
+  sizing:
+    method: kelly_fraction
+    kelly_fraction_limit: 0.25  # conservador para crypto
+    max_leverage: 1.0
+    
+risk_management:
+  stop_loss:
+    method: atr
+    atr_multiplier: 1.5  # ajustado para volatilidad de BTC
+    
+  take_profit:
+    method: atr
+    atr_multiplier: 3.0
+    
+  costs:
+    commission_rate: 0.001   # 0.1% Binance spot (sin BNB discount)
+    slippage_rate: 0.0005    # 0.05% para BTC/USDT líquido
+    spread_cost: 0.0001      # spread típico
+    
+backtesting:
+  initial_capital: 10000.0
+  compound_returns: true
+  
+  # Métricas específicas para crypto
+  metrics:
+    - total_return
+    - sharpe_ratio
+    - sortino_ratio
+    - max_drawdown
+    - calmar_ratio
+    - profit_factor
+    - hit_rate
+    - avg_win_loss_ratio
+    - directional_accuracy
+    - brier_score
+    - volatility_adjusted_return
+    
+# Configuración específica para este ejemplo
+run_config:
+  name: btc_usdt_1h_spot
+  description: "BTC/USDT 1h Binance Spot con HMM Gaussiano 3 regímenes"
+  tags:
+    - btc
+    - spot
+    - hourly
+    - hmm
+    
+# Configuración de APIs (usar variables de entorno)
+api:
+  binance:
+    # Estas se cargan desde variables de entorno
+    # BINANCE_API_KEY=your_api_key
+    # BINANCE_API_SECRET=your_api_secret
+    rate_limit: 1200  # requests por minuto
+    timeout: 10000    # ms
